@@ -23,9 +23,13 @@ def download_profile_picture(profile, destination_folder):
 def download_posts(profile, destination_folder, loader):
     """Download all posts of the source account."""
     print(f"Downloading posts of {profile.username}...")
+    posts_folder = os.path.join(destination_folder, "posts")
+    if not os.path.exists(posts_folder):
+        os.makedirs(posts_folder)
+
     posts = profile.get_posts()
     for i, post in enumerate(posts, start=1):
-        loader.download_post(post, target=f"{destination_folder}/{profile.username}")
+        loader.download_post(post, target=posts_folder)
         print(f"Downloaded post {i}")
 
 
@@ -52,11 +56,14 @@ def upload_to_target_account(client, destination_folder, target_username, bio):
         return
 
     for post_file in os.listdir(posts_folder):
-        if post_file.endswith(".jpg") or post_file.endswith(".png"):
-            post_path = os.path.join(posts_folder, post_file)
-            caption = f"Uploaded from {target_username}'s account."
-            client.photo_upload(post_path, caption=caption)
-            print(f"Uploaded post: {post_file}")
+        try:
+            if post_file.endswith(".jpg") or post_file.endswith(".png"):
+                post_path = os.path.join(posts_folder, post_file)
+                caption = f"Uploaded from {target_username}'s account."
+                client.photo_upload(post_path, caption=caption)
+                print(f"Uploaded post: {post_file}")
+        except Exception as e:
+            print(f"Failed to upload {post_file}: {e}")
     print("All posts uploaded successfully!")
 
 
@@ -66,7 +73,7 @@ def main():
     # Inputs
     source_username = input("Enter the source Instagram username: ")
     target_username = input("Enter the target Instagram username: ")
-    cookies_path = input("Enter the path to the Netscape cookies file: ")
+    cookies_path = os.path.join(os.path.dirname(__file__), "cookies.txt")
 
     # Create folders
     destination_folder = f"cloned_{source_username}"
@@ -76,8 +83,10 @@ def main():
     # Login to Instagram using instagrapi
     client = Client()
     try:
-        client.load_settings(cookies_path)
-        client.login_by_sessionid(cookies_path)
+        with open(cookies_path, "r") as f:
+            cookies_content = f.read()
+        sessionid = cookies_content.split("sessionid\t")[1].split("\n")[0]
+        client.login_by_sessionid(sessionid)
         print("Logged in successfully!")
     except Exception as e:
         print(f"Login failed: {e}")
@@ -85,8 +94,6 @@ def main():
 
     # Use Instaloader to fetch source profile details
     loader = Instaloader()
-    loader.load_session_from_file(cookies_path)
-
     try:
         profile = Profile.from_username(loader.context, source_username)
     except Exception as e:
@@ -94,7 +101,7 @@ def main():
         return
 
     # Download profile picture and posts
-    profile_pic_path = download_profile_picture(profile, destination_folder)
+    download_profile_picture(profile, destination_folder)
     download_posts(profile, destination_folder, loader)
 
     # Upload to target account
